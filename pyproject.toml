@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mpremote-mcp"
+version = "0.1.0"
+description = "MCP server for MicroPython boards via mpremote"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp",
+    "mpremote",
+    "pyserial",
+]
+
+[project.scripts]
+mpremote-mcp = "mpremote_mcp:main"
