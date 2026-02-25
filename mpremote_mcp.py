@@ -316,6 +316,28 @@ print(f"Usage: {{used * 100 // total}}%")
 
 
 @mcp.tool()
+def mip_install(
+    package: str, target: str = "/lib", version: str = "", mpy: bool = True
+) -> str:
+    """Install a MicroPython package from micropython-lib or URL.
+
+    Args:
+        package: Package name, or github:org/repo, or URL to package.json.
+        target: Target directory on device (default "/lib").
+        version: Package version (empty string for latest).
+        mpy: Download pre-compiled .mpy files (default True).
+    """
+    from mpremote.mip import _install_package, _PACKAGE_INDEX
+
+    t = _open(soft_reset=True)
+    try:
+        _install_package(t, package, _PACKAGE_INDEX, target, version or None, mpy)
+        return f"Installed {package} to {target}"
+    finally:
+        _close(t)
+
+
+@mcp.tool()
 def rtc_get() -> str:
     """Read the device's real-time clock."""
     code = """\
