@@ -183,6 +183,50 @@ print("mem_alloc:", gc.mem_alloc())
 
 
 @mcp.tool()
+def eval(expression: str, timeout: int = 30) -> str:
+    """Evaluate a MicroPython expression and return its result.
+
+    Args:
+        expression: Python expression to evaluate (e.g. "2 + 2").
+        timeout: Timeout in seconds (default 30).
+    """
+    t = _open()
+    try:
+        t.exec_raw_no_follow(f"print(repr({expression}))")
+        ret, ret_err = t.follow(timeout=timeout)
+        if ret_err:
+            from mpremote.transport import TransportExecError
+
+            raise TransportExecError(ret, ret_err.decode())
+        return ret.decode(errors="replace")
+    finally:
+        _close(t)
+
+
+@mcp.tool()
+def run(file_path: str, timeout: int = 30) -> str:
+    """Run a local Python file on the device from RAM (not copied to filesystem).
+
+    Args:
+        file_path: Path to a .py file on the host machine.
+        timeout: Timeout in seconds (default 30).
+    """
+    with open(file_path) as f:
+        code = f.read()
+    t = _open()
+    try:
+        t.exec_raw_no_follow(code)
+        ret, ret_err = t.follow(timeout=timeout)
+        if ret_err:
+            from mpremote.transport import TransportExecError
+
+            raise TransportExecError(ret, ret_err.decode())
+        return ret.decode(errors="replace")
+    finally:
+        _close(t)
+
+
+@mcp.tool()
 def mkdir(path: str) -> str:
     """Create a directory on the device filesystem.
 
