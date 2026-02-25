@@ -315,6 +315,66 @@ print(f"Usage: {{used * 100 // total}}%")
         _close(t)
 
 
+@mcp.tool()
+def rtc_get() -> str:
+    """Read the device's real-time clock."""
+    code = """\
+try:
+    from machine import RTC
+    dt = RTC().datetime()
+    print(f"{dt[0]:04d}-{dt[1]:02d}-{dt[2]:02d} {dt[4]:02d}:{dt[5]:02d}:{dt[6]:02d}")
+except Exception as e:
+    print(f"RTC not available: {e}")
+"""
+    t = _open()
+    try:
+        result = t.exec(code)
+        return result.decode(errors="replace")
+    finally:
+        _close(t)
+
+
+@mcp.tool()
+def rtc_set() -> str:
+    """Sync the device's real-time clock to the host's current time."""
+    import datetime
+
+    now = datetime.datetime.now()
+    code = f"""\
+from machine import RTC
+RTC().datetime(({now.year}, {now.month}, {now.day}, {now.weekday()}, {now.hour}, {now.minute}, {now.second}, 0))
+dt = RTC().datetime()
+print(f"RTC set to: {{dt[0]:04d}}-{{dt[1]:02d}}-{{dt[2]:02d}} {{dt[4]:02d}}:{{dt[5]:02d}}:{{dt[6]:02d}}")
+"""
+    t = _open()
+    try:
+        result = t.exec(code)
+        return result.decode(errors="replace")
+    finally:
+        _close(t)
+
+
+@mcp.tool()
+def hard_reset() -> str:
+    """Hard reset the device (equivalent to machine.reset())."""
+    port = _find_device()
+    try:
+        t = SerialTransport(port, baudrate=MPY_BAUD)
+        t.enter_raw_repl(soft_reset=False)
+        try:
+            t.exec_raw_no_follow("import machine; machine.reset()")
+            time.sleep(0.5)
+        except Exception:
+            pass
+        try:
+            t.close()
+        except Exception:
+            pass
+    except Exception as e:
+        log.info("hard_reset serial exception (expected): %s", e)
+    return "Device hard reset initiated."
+
+
 def main():
     mcp.run(transport="stdio")
 
