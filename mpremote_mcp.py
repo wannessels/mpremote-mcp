@@ -9,7 +9,6 @@ import time
 import serial.tools.list_ports
 from fastmcp import FastMCP
 from mpremote.transport_serial import SerialTransport
-from mpremote.transport import TransportError
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO)
 log = logging.getLogger("mpremote-mcp")
@@ -67,6 +66,7 @@ def exec(code: str, timeout: int = 30) -> str:
         ret, ret_err = t.follow(timeout=timeout)
         if ret_err:
             from mpremote.transport import TransportExecError
+
             raise TransportExecError(ret, ret_err.decode())
         return ret.decode(errors="replace")
     finally:
