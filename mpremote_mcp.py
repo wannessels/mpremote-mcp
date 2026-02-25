@@ -182,6 +182,95 @@ print("mem_alloc:", gc.mem_alloc())
         _close(t)
 
 
+@mcp.tool()
+def mkdir(path: str) -> str:
+    """Create a directory on the device filesystem.
+
+    Args:
+        path: Directory path to create (e.g. "/lib").
+    """
+    t = _open()
+    try:
+        t.fs_mkdir(path)
+        return f"Created directory {path}"
+    finally:
+        _close(t)
+
+
+@mcp.tool()
+def rmdir(path: str) -> str:
+    """Remove a directory on the device filesystem.
+
+    Args:
+        path: Directory path to remove (must be empty).
+    """
+    t = _open()
+    try:
+        t.fs_rmdir(path)
+        return f"Removed directory {path}"
+    finally:
+        _close(t)
+
+
+@mcp.tool()
+def rm(path: str) -> str:
+    """Remove a file on the device filesystem.
+
+    Args:
+        path: File path to remove (e.g. "/main.py").
+    """
+    t = _open()
+    try:
+        t.fs_rmfile(path)
+        return f"Removed {path}"
+    finally:
+        _close(t)
+
+
+@mcp.tool()
+def touch(path: str) -> str:
+    """Create an empty file (or update access time) on the device.
+
+    Args:
+        path: File path to touch (e.g. "/data.txt").
+    """
+    t = _open()
+    try:
+        t.fs_touchfile(path)
+        return f"Touched {path}"
+    finally:
+        _close(t)
+
+
+@mcp.tool()
+def df(path: str = "/") -> str:
+    """Get filesystem storage statistics (free/used space).
+
+    Args:
+        path: Filesystem mount point (default: "/").
+    """
+    code = f"""\
+import os
+s = os.statvfs('{path}')
+block_size = s[0]
+total_blocks = s[2]
+free_blocks = s[3]
+total = block_size * total_blocks
+free = block_size * free_blocks
+used = total - free
+print(f"Total: {{total}} bytes ({{total // 1024}} KB)")
+print(f"Used:  {{used}} bytes ({{used // 1024}} KB)")
+print(f"Free:  {{free}} bytes ({{free // 1024}} KB)")
+print(f"Usage: {{used * 100 // total}}%")
+"""
+    t = _open()
+    try:
+        result = t.exec(code)
+        return result.decode(errors="replace")
+    finally:
+        _close(t)
+
+
 def main():
     mcp.run(transport="stdio")
 
