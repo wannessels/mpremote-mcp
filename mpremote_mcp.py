@@ -35,10 +35,10 @@ def _find_device() -> str:
     raise RuntimeError("No MicroPython device found. Set MPY_PORT or connect a device.")
 
 
-def _open(soft_reset=False) -> SerialTransport:
+def _open(soft_reset=False, timeout=None) -> SerialTransport:
     """Open serial connection and enter raw REPL."""
     port = _find_device()
-    t = SerialTransport(port, baudrate=MPY_BAUD)
+    t = SerialTransport(port, baudrate=MPY_BAUD, timeout=timeout)
     t.enter_raw_repl(soft_reset=soft_reset)
     return t
 
@@ -52,18 +52,55 @@ def _close(t: SerialTransport):
     t.close()
 
 
+def _exec_follow(t, code, timeout, read_timeout):
+    """Execute code and follow output with both idle and absolute timeouts.
+
+    Args:
+        t: SerialTransport connection.
+        code: MicroPython code to execute.
+        timeout: Absolute wall-clock timeout in seconds.
+        read_timeout: Per-character idle timeout in seconds.
+    """
+    from mpremote.transport import TransportError
+
+    t.exec_raw_no_follow(code)
+
+    start = time.monotonic()
+
+    # Read stdout (terminated by \x04)
+    data = t.read_until(1, b"\x04", timeout=read_timeout, timeout_overall=timeout)
+    if not data.endswith(b"\x04"):
+        raise TransportError("timeout waiting for first EOF reception")
+    data = data[:-1]
+
+    # Read stderr (terminated by \x04) with remaining time budget
+    elapsed = time.monotonic() - start
+    remaining = max(timeout - elapsed, 0.1)
+    data_err = t.read_until(
+        1,
+        b"\x04",
+        timeout=min(read_timeout, remaining),
+        timeout_overall=remaining,
+    )
+    if not data_err.endswith(b"\x04"):
+        raise TransportError("timeout waiting for second EOF reception")
+    data_err = data_err[:-1]
+
+    return data, data_err
+
+
 @mcp.tool()
-def exec(code: str, timeout: int = 30) -> str:
+def exec(code: str, timeout: int = 30, read_timeout: int = 10) -> str:
     """Execute MicroPython code on the board and return stdout.
 
     Args:
         code: Python code to execute on the device.
-        timeout: Timeout in seconds waiting for output (default 30).
+        timeout: Absolute wall-clock timeout in seconds (default 30).
+        read_timeout: Per-character idle timeout in seconds (default 10).
     """
-    t = _open()
+    t = _open(timeout=timeout)
     try:
-        t.exec_raw_no_follow(code)
-        ret, ret_err = t.follow(timeout=timeout)
+        ret, ret_err = _exec_follow(t, code, timeout, read_timeout)
         if ret_err:
             from mpremote.transport import TransportExecError
 
@@ -183,17 +220,19 @@ print("mem_alloc:", gc.mem_alloc())
 
 
 @mcp.tool()
-def eval(expression: str, timeout: int = 30) -> str:
+def eval(expression: str, timeout: int = 30, read_timeout: int = 10) -> str:
     """Evaluate a MicroPython expression and return its result.
 
     Args:
         expression: Python expression to evaluate (e.g. "2 + 2").
-        timeout: Timeout in seconds (default 30).
+        timeout: Absolute wall-clock timeout in seconds (default 30).
+        read_timeout: Per-character idle timeout in seconds (default 10).
     """
-    t = _open()
+    t = _open(timeout=timeout)
     try:
-        t.exec_raw_no_follow(f"print(repr({expression}))")
-        ret, ret_err = t.follow(timeout=timeout)
+        ret, ret_err = _exec_follow(
+            t, f"print(repr({expression}))", timeout, read_timeout
+        )
         if ret_err:
             from mpremote.transport import TransportExecError
 
@@ -204,19 +243,19 @@ def eval(expression: str, timeout: int = 30) -> str:
 
 
 @mcp.tool()
-def run(file_path: str, timeout: int = 30) -> str:
+def run(file_path: str, timeout: int = 30, read_timeout: int = 10) -> str:
     """Run a local Python file on the device from RAM (not copied to filesystem).
 
     Args:
         file_path: Path to a .py file on the host machine.
-        timeout: Timeout in seconds (default 30).
+        timeout: Absolute wall-clock timeout in seconds (default 30).
+        read_timeout: Per-character idle timeout in seconds (default 10).
     """
     with open(file_path) as f:
         code = f.read()
-    t = _open()
+    t = _open(timeout=timeout)
     try:
-        t.exec_raw_no_follow(code)
-        ret, ret_err = t.follow(timeout=timeout)
+        ret, ret_err = _exec_follow(t, code, timeout, read_timeout)
         if ret_err:
             from mpremote.transport import TransportExecError
 
